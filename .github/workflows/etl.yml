@@ -33,5 +33,5 @@ jobs:
           curl -X POST \
           -H "Authorization: token ${{ secrets.PAT_TOKEN }}" \
           -H "Accept: application/vnd.github.v3+json" \
-          https://api.github.com/repos/<your-username>/dataops-agentic/dispatches \
+          https://api.github.com/repos/suparnamitra/dataops-agentic/dispatches \
           -d '{"event_type":"etl_failure","client_payload":{"run_id":"${{ github.run_id }}"}}'
