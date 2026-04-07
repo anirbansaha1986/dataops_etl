@@ -1,14 +1,19 @@
 from etl.pipeline import run_pipeline
-import sys
+from rag.ingest_logs import ingest_logs
+from rag.agent_chat import start_chat
+
 import json
 
 if __name__ == "__main__":
+
+    print("\nRunning ETL Pipeline...\n")
+
     run_pipeline()
 
-    with open("etl_log.json") as f:
-        log = json.load(f)
+    print("\nIngesting logs into vector database...\n")
 
-    if log["status"] == "SUCCESS":
-        sys.exit(0)
-    else:
-        sys.exit(1)
+    ingest_logs()
+
+    print("\nLogs ready for AI analysis.\n")
+
+    start_chat()
