@@ -1,4 +1,24 @@
 venv/
+venvEtl/
+*.pc
+etl_log.json
+*.log
+*.db
+chroma/
+.env
+# Python
 __pycache__/
 *.pyc
-etl_log.json
+*.pyo
+*.pyd
+# Data Files
+data/creditcard.csv
+#ChromaDB
+chroma_store/
+*.log
+logs/
+# Streamlit
+.streamlit/
+# OS Files
+.DS_Store
+Thumbs.db

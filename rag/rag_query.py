@@ -2,31 +2,33 @@ from rag.retriever import retrieve_context
 from rag.llm_client import ask_llm
 
 
-def ask_pipeline(question):
+def ask_agent(question):
 
     context = retrieve_context(question)
 
     context_text = "\n".join(context)
 
+    # Simple answers without LLM
+    if "fraud" in question.lower():
+
+        fraud_count = sum(
+            1 for c in context if "fraudulent" in c
+        )
+
+        return f"Detected {fraud_count} fraud transactions in retrieved records."
+
+    # If reasoning required → call LLM
+
     prompt = f"""
-You are a DataOps AI agent responsible for monitoring ETL pipelines.
+You are a fraud detection analyst.
 
-Use the pipeline logs below to answer the question.
-
-Pipeline Logs:
+Historical transaction data:
 {context_text}
 
-Instructions:
-- Identify pipeline failures
-- Explain the root cause
-- Suggest remediation if possible
-
-User Question:
+Question:
 {question}
 
-Answer clearly and concisely.
+Provide a concise answer.
 """
 
-    response = ask_llm(prompt)
-
-    return response
+    return ask_llm(prompt)

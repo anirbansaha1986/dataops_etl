@@ -1,18 +1,9 @@
-import json
-import datetime
+import logging
 
-def log_event(final_status, results):
-    log = {
-        "timestamp": datetime.datetime.now().isoformat(),
-        "status": final_status,
-        "total_files": len(results),
-        "success_count": len([r for r in results if r["status"] == "SUCCESS"]),
-        "failure_count": len([r for r in results if r["status"] == "FAILURE"]),
-        "details": results
-    }
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s"
+)
 
-    with open("etl_log.json", "w") as f:
-        json.dump(log, f, indent=2)
-
-    print("\nFINAL ETL LOG:")
-    print(json.dumps(log, indent=2))
+def get_logger(name):
+    return logging.getLogger(name)
