@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 from rag.embedder import generate_embeddings
 from rag.vector_store import add_documents, collection
@@ -21,7 +22,7 @@ def ingest_credit_data():
     # =========================
     # 2. FILTER (IMPORTANT)
     # =========================
-    df = df[df["Class"] == 1]   # only fraud
+    df = df[df["Class"] == 1].copy()   # only fraud
 
     logger.info(f"Fraud records: {len(df)}")
 
@@ -30,7 +31,54 @@ def ingest_credit_data():
         return
 
     # =========================
-    # 3. BUILD DOCUMENTS
+    # 3. FEATURE ENGINEERING
+    # =========================
+    df["abs_v14"] = df["V14"].abs()
+    df["abs_v17"] = df["V17"].abs()
+
+    df["is_micro_txn"] = (df["Amount"] < 1).astype(int)
+    df["is_high_amount"] = (df["Amount"] > 500).astype(int)
+
+    df["amount_bucket"] = pd.cut(
+        df["Amount"],
+        bins=[-0.01, 1, 50, 500, float("inf")],
+        labels=["micro", "low", "medium", "high"],
+        include_lowest=True
+    )
+
+    df["signal_list"] = df.apply(generate_signals, axis=1)
+    df["signal_count"] = df["signal_list"].apply(len)
+    df["signal_text"] = df["signal_list"].apply(
+        lambda x: ", ".join(x) if x else "No strong signals"
+    )
+
+    df["risk_score_rule_based"] = (
+        df["is_micro_txn"] * 20 +
+        df["is_high_amount"] * 15 +
+        (df["abs_v14"] > 5).astype(int) * 30 +
+        (df["abs_v17"] > 5).astype(int) * 35
+    )
+
+    logger.info("✅ Feature engineering completed")
+
+    # =========================
+    # 4. FEATURE STORE EXPORT
+    # =========================
+    os.makedirs("data/feature_store", exist_ok=True)
+
+    parquet_path = "data/feature_store/transactions_features.parquet"
+    csv_fallback_path = "data/feature_store/transactions_features.csv"
+
+    try:
+        df.to_parquet(parquet_path, index=False)
+        logger.info(f"📦 Feature store saved to Parquet: {parquet_path}")
+    except Exception as e:
+        logger.warning(f"Parquet export failed ({e}). Saving CSV fallback instead.")
+        df.to_csv(csv_fallback_path, index=False)
+        logger.info(f"📦 Feature store saved to CSV fallback: {csv_fallback_path}")
+
+    # =========================
+    # 5. BUILD DOCUMENTS FOR RAG
     # =========================
     texts = []
     ids = []
@@ -38,18 +86,19 @@ def ingest_credit_data():
 
     for i, row in df.iterrows():
 
-        signals = generate_signals(row)
-
         text = f"""
 Transaction Summary:
 - Amount: {row['Amount']}
 - Time: {row['Time']}
+- Amount Bucket: {row['amount_bucket']}
+- Signal Count: {row['signal_count']}
+- Rule Based Risk Score: {row['risk_score_rule_based']}
 
 Fraud Signals:
-{', '.join(signals) if signals else 'No strong signals'}
+{row['signal_text']}
 
 Feature Snapshot:
-V1={row['V1']}, V2={row['V2']}, V3={row['V3']}, V14={row['V14']}, V17={row['V17']}
+V1={row['V1']}, V2={row['V2']}, V3={row['V3']}, abs_v14={row['abs_v14']}, abs_v17={row['abs_v17']}
 """
 
         texts.append(text.strip())
@@ -57,13 +106,18 @@ V1={row['V1']}, V2={row['V2']}, V3={row['V3']}, V14={row['V14']}, V17={row['V17'
 
         metadatas.append({
             "Amount": float(row["Amount"]),
-            "Class": int(row["Class"])
+            "Class": int(row["Class"]),
+            "amount_bucket": str(row["amount_bucket"]),
+            "signal_count": int(row["signal_count"]),
+            "risk_score_rule_based": int(row["risk_score_rule_based"]),
+            "is_micro_txn": int(row["is_micro_txn"]),
+            "is_high_amount": int(row["is_high_amount"])
         })
 
     logger.info(f"Prepared {len(texts)} documents")
 
     # =========================
-    # 4. EMBEDDINGS
+    # 6. EMBEDDINGS
     # =========================
     embeddings = generate_embeddings(texts)
 
@@ -74,12 +128,12 @@ V1={row['V1']}, V2={row['V2']}, V3={row['V3']}, V14={row['V14']}, V17={row['V17'
     logger.info(f"Generated {len(embeddings)} embeddings")
 
     # =========================
-    # 5. STORE IN CHROMA
+    # 7. STORE IN CHROMA
     # =========================
     add_documents(texts, embeddings, ids, metadatas)
 
     # =========================
-    # 6. VERIFY STORAGE
+    # 8. VERIFY STORAGE
     # =========================
     count = collection.count()
 
