@@ -22,3 +22,4 @@ logs/
 # OS Files
 .DS_Store
 Thumbs.db
+data/feature_store/
